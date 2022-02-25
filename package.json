@@ -5,7 +5,8 @@
     "aws-cdk-explorations": "bin/aws-cdk-explorations.js"
   },
   "scripts": {
-    "build": "tsc",
+    "bootstrap": "cdk bootstrap",
+    "build:fast-gql": "tsc",
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk",
