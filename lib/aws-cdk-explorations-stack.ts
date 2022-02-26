@@ -92,6 +92,14 @@ export class AwsCdkExplorationsStack extends Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC
       },
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(8, {
+            deleteOnTermination: true
+          })
+        }
+      ],
       securityGroup,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T2,
@@ -126,7 +134,10 @@ export class AwsCdkExplorationsStack extends Stack {
       bucketKey: serverAsset.s3ObjectKey,
       localFile: '/home/ec2-user/index.js'
     })
-    ec2Instance.userData.addCommands(`node ${serverLocalPath}`)
+    ec2Instance.userData.addCommands(
+      `node ${serverLocalPath}`,
+      `echo "${new Date()}" >> /home/ec2-user/deploy.txt`
+    )
     serverAsset.grantRead(ec2Instance.role)
 
     new CfnOutput(this, 'MyEC2IP', {

@@ -5,7 +5,12 @@ const app = Fastify({
 })
 
 app.get('/', async (req, res) => {
-  return { hello_world: 'world from fastify!' }
+  return { hello_world: 'world from fastify!!' }
 })
 
-app.listen(process.env.SERVER_PORT || 80)
+app.listen(process.env.SERVER_PORT || 3000, '0.0.0.0', (err) => {
+  if (err) {
+    app.log.error(err)
+    process.exit(1)
+  }
+})
