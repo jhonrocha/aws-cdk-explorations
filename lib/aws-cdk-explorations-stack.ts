@@ -1,6 +1,6 @@
 /* eslint-disable no-useless-constructor, no-new */
 import { Stack, StackProps, DockerImage, BundlingOptions, CfnOutput } from 'aws-cdk-lib'
-import { RestApi, LambdaIntegration } from 'aws-cdk-lib/aws-apigateway'
+import { RestApi, LambdaIntegration, Resource } from 'aws-cdk-lib/aws-apigateway'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import { Construct } from 'constructs'
@@ -28,11 +28,23 @@ export class AwsCdkExplorationsStack extends Stack {
   }
 
   createLambdas (api: RestApi) {
-    const lambdaApi = api.root.addResource('lambda')
+    const lambdaResouce = api.root.addResource('lambda')
+    this.lambdaRust(lambdaResouce)
+    this.lambdaPython(lambdaResouce)
+  }
 
-    // ------------------------------
-    //    LAMBDA RUST STACK
-    // ------------------------------
+  lambdaPython (lambdaApi: Resource) {
+    const pyHandler = new lambda.Function(this, 'PlayPython', {
+      functionName: 'play-py',
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'lambda', 'play-py')),
+      runtime: lambda.Runtime.PYTHON_3_9,
+      handler: 'main.handler'
+    })
+    const pyApi = lambdaApi.addResource('python')
+    pyApi.addMethod('GET', new LambdaIntegration(pyHandler))
+  }
+
+  lambdaRust (lambdaApi: Resource) {
     const pathRust = path.join(__dirname, '..', 'lambda', 'play-rs')
     const target = 'x86_64-unknown-linux-musl'
     const rustHandler = new lambda.Function(this, 'PlayRust', {
