@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node dist/index.js",
-    "build": "esbuild index.ts --bundle --outdir=dist --platform=node --target=node14"
+    "build": "esbuild index.ts --minify --bundle --outdir=dist --platform=node --target=node14"
   },
   "keywords": [],
   "author": "",

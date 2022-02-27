@@ -86,6 +86,49 @@ export class AwsCdkExplorationsStack extends Stack {
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'allow HTTP traffic from anywhere')
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'allow HTTPS traffic from anywhere')
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(3000), 'allow HTTP traffic from anywhere')
+    // Initial setup
+    const multipartUserData = new ec2.MultipartUserData()
+    const setupCommands = ec2.UserData.forLinux()
+    // Check: /var/log/cloud-init.log and /var/log/cloud-init-output.log
+    // There is also: /etc/cloud folder
+    const userDataAsset = new Asset(this, 'userDataAsset', { path: path.join(__dirname, 'user-data.sh') })
+    const localPath = setupCommands.addS3DownloadCommand({
+      bucket: userDataAsset.bucket,
+      bucketKey: userDataAsset.s3ObjectKey
+    })
+    setupCommands.addExecuteFileCommand({
+      filePath: localPath,
+      arguments: '--verbose -y'
+    })
+    multipartUserData.addPart(ec2.MultipartBody.fromUserData(setupCommands))
+
+    // Now create the first part to make cloud-init run it always
+    const cinitConf = ec2.UserData.forLinux()
+    cinitConf.addCommands(
+      '#cloud-config',
+      'cloud_final_modules:',
+      '- [scripts-user, always]'
+    )
+    multipartUserData.addPart(ec2.MultipartBody.fromUserData(cinitConf, 'text/cloud-config'))
+
+    // Bundled Server
+    const restartCommands = ec2.UserData.forLinux()
+    const serverPath = path.join(__dirname, '..', 'ec2', 'fast-gql')
+    spawnSync('npm', ['run', 'build'], { cwd: serverPath })
+    const serverAsset = new Asset(this, 'serverAsset', {
+      path: path.join(serverPath, 'dist', 'index.js')
+    })
+    const serverLocalPath = restartCommands.addS3DownloadCommand({
+      bucket: serverAsset.bucket,
+      bucketKey: serverAsset.s3ObjectKey,
+      localFile: '/home/ec2-user/index.js'
+    })
+    restartCommands.addCommands(
+      `node ${serverLocalPath} &`,
+      `echo "${new Date()}" >> /home/ec2-user/deploy.txt`
+    )
+    multipartUserData.addPart(ec2.MultipartBody.fromUserData(restartCommands))
+    // EC2 Instance
     const ec2Instance = new ec2.Instance(this, 'my-ec2-instance', {
       instanceName: 'CdkExpv5',
       vpc,
@@ -106,38 +149,13 @@ export class AwsCdkExplorationsStack extends Stack {
         ec2.InstanceSize.MICRO
       ),
       machineImage: new ec2.AmazonLinuxImage({
-        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
+        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2022
       }),
-      keyName: 'ec2-key-pair'
+      keyName: 'ec2-key-pair',
+      userData: multipartUserData
     })
-    // Initial setup
-    // Check: /var/log/cloud-init.log and /var/log/cloud-init-output.log
-    // There is also: /etc/cloud folder
-    const userDataAsset = new Asset(this, 'userDataAsset', { path: path.join(__dirname, 'user-data.sh') })
-    const localPath = ec2Instance.userData.addS3DownloadCommand({
-      bucket: userDataAsset.bucket,
-      bucketKey: userDataAsset.s3ObjectKey
-    })
-    ec2Instance.userData.addExecuteFileCommand({
-      filePath: localPath,
-      arguments: '--verbose -y'
-    })
+    // Grant read access
     userDataAsset.grantRead(ec2Instance.role)
-    // Bundled Server
-    const serverPath = path.join(__dirname, '..', 'ec2', 'fast-gql')
-    spawnSync('npm', ['run', 'build'], { cwd: serverPath })
-    const serverAsset = new Asset(this, 'serverAsset', {
-      path: path.join(serverPath, 'dist', 'index.js')
-    })
-    const serverLocalPath = ec2Instance.userData.addS3DownloadCommand({
-      bucket: serverAsset.bucket,
-      bucketKey: serverAsset.s3ObjectKey,
-      localFile: '/home/ec2-user/index.js'
-    })
-    ec2Instance.userData.addCommands(
-      `node ${serverLocalPath}`,
-      `echo "${new Date()}" >> /home/ec2-user/deploy.txt`
-    )
     serverAsset.grantRead(ec2Instance.role)
 
     new CfnOutput(this, 'MyEC2IP', {
