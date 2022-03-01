@@ -125,8 +125,9 @@ export class AwsCdkExplorationsStack extends Stack {
 
     // Bundled Server
     const restartCommands = ec2.UserData.forLinux()
-    const serverPath = path.join(__dirname, '..', 'ec2', 'fast-gql')
+    const serverPath = path.join(__dirname, '..')
     spawnSync('npm', ['run', 'build'], { cwd: serverPath })
+    // Send to S3
     const serverAsset = new Asset(this, 'serverAsset', {
       path: path.join(serverPath, 'dist', 'index.js')
     })
